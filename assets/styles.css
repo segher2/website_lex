@@ -28,7 +28,8 @@ body{
   box-shadow: 0 2px 6px rgba(0,0,0,.05);
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between; /* space between title and dropdown */
+  padding: 0 1rem;
   z-index: 100;
 }
 
@@ -38,6 +39,74 @@ body{
   color: var(--muted);
   letter-spacing: 0.2px;
 }
+
+/* --- Menu button --- */
+.menu {
+  position: relative;
+}
+
+.menu-button {
+  font-size: 22px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+.menu-button:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* --- Dropdown list --- */
+.menu-list {
+  position: absolute;
+  right: 0;
+  top: 56px;
+  background: var(--surface);
+  border: 1px solid var(--stroke);
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+  min-width: 180px;
+  display: none;
+}
+
+.menu-list.open {
+  display: block;
+}
+
+.menu-list li {
+  margin: 0;
+}
+
+.menu-list a {
+  display: block;
+  padding: 8px 14px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.menu-list a:hover {
+  background: var(--bg);
+}
+
+/* make space for fixed header */
+body {
+  margin: 0;
+  font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans";
+  background: linear-gradient(180deg, var(--bg) 0%, #e9ecf1 100%);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 56px;
+}
+
 
 /* add padding so the main box clears the fixed header */
 body {
