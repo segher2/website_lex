@@ -11,8 +11,10 @@
   <header class="topbar">
     <span class="site-title">As One – Lex ter Braak</span>
     <nav class="menu">
-      <button class="menu-button" aria-label="Menu">☰</button>
-      <ul class="menu-list">
+      <button class="menu-button" id="menuButton"
+              aria-label="Menu" aria-haspopup="true" aria-expanded="false"
+              aria-controls="menuList">☰</button>
+      <ul class="menu-list" id="menuList">
         <li><a href="01_La17_20a.html">La 20, 19, 18, 17</a></li>
 <li><a href="02_La16a.html">La 16</a></li>
 <li><a href="03_La1.html">La 1</a></li>
@@ -51,9 +53,65 @@
   </main>
 
   <script>
-    const btn = document.querySelector('.menu-button');
-    const menu = document.querySelector('.menu-list');
-    btn.addEventListener('click', () => menu.classList.toggle('open'));
+    const btn  = document.getElementById('menuButton');
+    const menu = document.getElementById('menuList');
+    const HEADER_H = 56;
+
+    function setMenuMaxHeight() {
+      let vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      const maxH = Math.max(120, Math.floor(vh - HEADER_H - 12));
+      menu.style.maxHeight = maxH + 'px';
+    }
+
+    function openMenu() {
+      setMenuMaxHeight();
+      menu.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+    function closeMenu() {
+      menu.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+    function toggleMenu() {
+      menu.classList.contains('open') ? closeMenu() : openMenu();
+    }
+
+    // Toggle on button click
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleMenu();
+    });
+
+    // Prevent clicks inside menu from bubbling
+    menu.addEventListener('click', (e) => e.stopPropagation());
+
+    // Close when clicking elsewhere
+    document.addEventListener('click', () => closeMenu());
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeMenu();
+    });
+
+    // Close when selecting a link
+    menu.querySelectorAll('a').forEach(a => {
+      a.addEventListener('click', () => closeMenu());
+    });
+
+    // Adjust height dynamically when viewport changes
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener('resize', () => {
+        if (menu.classList.contains('open')) setMenuMaxHeight();
+      });
+      vv.addEventListener('scroll', () => {
+        if (menu.classList.contains('open')) setMenuMaxHeight();
+      });
+    } else {
+      window.addEventListener('resize', () => {
+        if (menu.classList.contains('open')) setMenuMaxHeight();
+      });
+    }
   </script>
 </body>
 </html>
