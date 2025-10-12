@@ -11,6 +11,10 @@ template = """<!DOCTYPE html>
   <link rel="stylesheet" href="assets/styles.css" />
 </head>
 <body>
+  <header class="topbar">
+    <span class="site-title">As One – Lex ter Braak</span>
+  </header>
+
   <main class="page">
     <h1 class="title">{title}</h1>
     <figure class="player">
