@@ -59,7 +59,7 @@ body{
   background: rgba(0, 0, 0, 0.05);
 }
 
-/* --- Dropdown list --- */
+/* --- Dropdown list (same look, now scrolls gracefully) --- */
 .menu-list {
   position: absolute;
   right: 0;
@@ -72,17 +72,21 @@ body{
   margin: 0;
   padding: 6px 0;
   min-width: 180px;
+  z-index: 200;
+
+  /* only additions/changes for scrolling */
+  max-height: calc(100vh - 72px); /* stays on screen */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  /* default hidden state */
   display: none;
 }
 
-.menu-list.open {
-  display: block;
-}
+.menu-list.open { display: block; }
 
-.menu-list li {
-  margin: 0;
-}
-
+/* keep items as they were */
+.menu-list li { margin: 0; }
 .menu-list a {
   display: block;
   padding: 8px 14px;
@@ -90,9 +94,18 @@ body{
   text-decoration: none;
   font-size: 14px;
 }
+.menu-list a:hover { background: var(--bg); }
 
-.menu-list a:hover {
-  background: var(--bg);
+/* slim, understated scrollbar (Firefox) */
+.menu-list { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,.12) transparent; }
+/* WebKit scrollbars */
+.menu-list::-webkit-scrollbar { width: 6px; }
+.menu-list::-webkit-scrollbar-thumb {
+  background-color: rgba(0,0,0,.12);
+  border-radius: 4px;
+}
+.menu-list:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(0,0,0,.18);
 }
 
 /* make space for fixed header */
