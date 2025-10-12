@@ -18,18 +18,26 @@ template = """<!DOCTYPE html>
         <source src="assets/audio/{file}" type="audio/mpeg" />
         Your browser does not support the audio element.
       </audio>
+      <figcaption class="pages">{pages}</figcaption>
     </figure>
   </main>
 </body>
 </html>"""
 
-tracks = json.load(open("tracks.json"))
+# Load tracks
+with open("tracks.json", "r", encoding="utf-8") as f:
+    tracks = json.load(f)
 
 out_dir = Path("")
 out_dir.mkdir(exist_ok=True)
 
 for i, track in enumerate(tracks, 1):
-    html = template.format(**track)
-    print(track)
-    (out_dir / f"{i:02d}_{track["file"][:-4]}.html").write_text(html, encoding="utf-8")
-    print(f"✓ Generated track-{i:02d}.html")
+    html = template.format(
+        title=track.get("title", ""),
+        file=track.get("file", ""),
+        pages=track.get("pages", ""),  # <- this is the new string caption
+    )
+
+    stem = Path(track["file"]).stem
+    (out_dir / f"{i:02d}_{stem}.html").write_text(html, encoding="utf-8")
+    print(f"✓ Generated {i:02d}_{stem}.html")
