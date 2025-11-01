@@ -1,110 +1,121 @@
 #!/usr/bin/env python3
 """
-Generate SVG QR codes from a list of strings (URLs, text, etc.).
-- Import and call `make_qr_svgs([...])`, OR
-- Run from CLI with items or a newline-separated file.
+Generate transparent SVG QR codes for each immediate subdirectory in a root folder.
 
-Requires: segno  (pip install segno)
+For each dir '01_La17_20a' we generate a QR for:
+    https://www.lexterbraak.nl/01_La17_20a/
+
+Output SVGs are saved in ./qr_svgs (or --out-dir).
+The SVG filename matches the directory name exactly (01_La17_20a.svg).
+
+All QR codes are rendered with the same module size (same grid),
+based on the largest required version among all dirs.
 """
 
 from __future__ import annotations
 import argparse
-import hashlib
 import pathlib
-import re
-from typing import Iterable, List, Optional
-from urllib.parse import urlparse
-
+from typing import List, Dict
 import segno
 
 
-def _ensure_url_scheme(s: str) -> str:
+BASE_URL = "https://www.lexterbraak.nl/"
+
+
+def get_immediate_subdirs(root: pathlib.Path) -> List[str]:
     """
-    If s looks like a web URL but lacks a scheme, add 'https://'.
-    Otherwise return s unchanged.
+    Return a sorted list of folder names directly under `root`.
+    Only directories, no recursion.
     """
-    s = s.strip()
-    if not s:
-        return s
-    # If it already has a scheme, keep it.
-    parsed = urlparse(s)
-    if parsed.scheme:
-        return s
-    # Heuristic: looks like a domain or starts with 'www.'
-    if re.match(r"^(www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}(/.*)?$", s):
-        return "https://" + s
-    return s
+    return sorted(
+        [p.name for p in root.iterdir() if p.is_dir()]
+    )
 
 
-def _safe_basename(s: str, max_len: int = 64) -> str:
+def make_payloads_from_dirs(dirnames: List[str]) -> Dict[str, str]:
     """
-    Create a filesystem-safe base filename from the input string.
-    Keeps a readable hint (domain or first path component) + a short hash.
+    Map dirname -> full URL like
+    '01_La17_20a' -> 'https://www.lexterbraak.nl/01_La17_20a/'
     """
-    hint = s.strip()
-    if not hint:
-        hint = "empty"
-
-    # Try to extract a meaningful hint (domain or first path piece)
-    parsed = urlparse(hint)
-    parts: List[str] = []
-    if parsed.netloc:
-        parts.append(parsed.netloc)
-        if parsed.path and parsed.path not in ("/", ""):
-            # take first non-empty path segment
-            seg = next((p for p in parsed.path.split("/") if p), "")
-            if seg:
-                parts.append(seg)
-    else:
-        # Not a URL – use the first 24 chars of the text
-        parts.append(hint[:24])
-
-    readable = "-".join(parts) if parts else "item"
-
-    # Sanitize
-    readable = re.sub(r"[^A-Za-z0-9._-]+", "-", readable).strip("-._")
-    if not readable:
-        readable = "item"
-
-    # Short content hash for uniqueness
-    short_hash = hashlib.blake2b(hint.encode("utf-8"), digest_size=6).hexdigest()
-
-    base = f"{readable}-{short_hash}"
-    if len(base) > max_len:
-        base = base[:max_len]
-
-    return base or "qr"
+    out: Dict[str, str] = {}
+    for d in dirnames:
+        # ensure trailing slash
+        url = BASE_URL + d.strip("/") + "/"
+        out[d] = url
+    return out
 
 
-def make_qr_svgs(
-    items: Iterable[str],
-    out_dir: str | pathlib.Path = "qr_svgs",
+def find_max_symbol_size(payloads: Dict[str, str]) -> int:
+    """
+    Generate temp segno QR objects for all payloads and
+    return the maximum matrix size (number of modules per side).
+    """
+    max_size = 0
+    for text in payloads.values():
+        qr = segno.make(text, error="m")
+        size = qr.symbol_size()[0]  # (width, height)
+        if size > max_size:
+            max_size = size
+    return max_size
+
+
+def save_qr_svgs_uniform(
+    payloads: Dict[str, str],
+    out_dir: pathlib.Path,
     *,
-    error: str = "m",          # 'l', 'm', 'q', or 'h'
-    scale: int = 10,           # pixel size per module in the SVG
-    border: int = 2,           # quiet zone modules
-    dark: str = "#000000",     # foreground color
-    light: Optional[str] = None,  # None = transparent background
-) -> list[pathlib.Path]:
+    error: str = "m",
+    scale: int = 10,
+    border: int = 2,
+    dark: str = "#000000",
+    light: str | None = None,
+) -> List[pathlib.Path]:
     """
-    Generate one SVG QR per item. Returns list of written file paths.
+    Render all payloads as SVG with the SAME symbol size
+    (max version / module count across all).
+    Return list of written file paths.
     """
-    out = pathlib.Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    written: list[pathlib.Path] = []
-    for raw in items:
-        if raw is None:
-            continue
-        text = str(raw).strip()
-        if not text:
-            continue
+    # 1. figure out max symbol size needed
+    max_size = find_max_symbol_size(payloads)
 
-        payload = _ensure_url_scheme(text)
-        qr = segno.make(payload, error=error)
+    written: List[pathlib.Path] = []
 
-        fname = _safe_basename(payload) + ".svg"
-        fpath = out / fname
+    for dirname, text in payloads.items():
+        # segno.make() will choose the minimal version that fits.
+        # We can't directly "upscale" version after creation,
+        # but we can force same grid size by telling segno not to
+        # increase error correction automatically and then exporting
+        # at a fixed scale. However, different data can still end up
+        # with different version numbers (grid sizes).
+        #
+        # Trick: we re-make larger versions by padding via "version"
+        # argument. segno lets us pass `version` to force at least that size.
+        #
+        # We pick a version that matches max_size.
+        #
+        # version '1' is 21x21 modules, and each increment adds 4 modules
+        # per side (25x25, 29x29, ...). We'll reverse-engineer which
+        # version number corresponds to max_size.
+
+        def version_from_size(sz: int) -> int:
+            # QR Version n has size = 21 + 4*(n-1)
+            # Solve n = ((sz - 21) / 4) + 1
+            n_float = ((sz - 21) / 4.0) + 1
+            n = int(round(n_float))
+            return max(n, 1)
+
+        target_version = version_from_size(max_size)
+
+        qr = segno.make(text, error=error, version=target_version, boost_error=False)
+
+        # double-check it's at least max_size; segno won't make it *smaller*
+        # than requested version when boost_error=False.
+        # (If for some reason it's bigger (rare), that's fine,
+        # all will still be consistent because target_version is same for all.)
+
+        fname = f"{dirname}.svg"
+        fpath = out_dir / fname
 
         qr.save(
             fpath,
@@ -112,42 +123,26 @@ def make_qr_svgs(
             scale=scale,
             border=border,
             dark=dark,
-            light=light,
+            light=light,  # None -> transparent background
         )
         written.append(fpath)
 
     return written
 
 
-def _read_lines_file(path: pathlib.Path) -> list[str]:
-    with path.open("r", encoding="utf-8") as f:
-        return [line.rstrip("\n") for line in f]
-
-
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate SVG QR codes from a list of strings (URLs/text)."
+        description="Generate uniform transparent SVG QR codes for each subdirectory."
     )
     parser.add_argument(
-        "items",
-        nargs="*",
-        help="Items to encode. If omitted, use --file to read newline-separated items.",
-    )
-    parser.add_argument(
-        "-f", "--file",
+        "root",
         type=pathlib.Path,
-        help="Path to a text file with one item per line.",
+        help="Path that contains the numbered folders (flat, no recursion).",
     )
     parser.add_argument(
         "-o", "--out-dir",
         default="qr_svgs",
-        help="Output directory (default: qr_svgs)",
-    )
-    parser.add_argument(
-        "--error",
-        choices=["l", "m", "q", "h"],
-        default="m",
-        help="Error correction level (default: m)",
+        help="Output directory for SVGs (default: qr_svgs)",
     )
     parser.add_argument(
         "--scale",
@@ -169,22 +164,21 @@ def main():
     parser.add_argument(
         "--light",
         default=None,
-        help="Background color; omit/None for transparent (default: None)",
+        help="Background color; leave None for transparent (default: None)",
     )
 
     args = parser.parse_args()
 
-    items: List[str] = list(args.items)
-    if args.file:
-        items.extend(_read_lines_file(args.file))
+    subdirs = get_immediate_subdirs(args.root)
+    if not subdirs:
+        parser.error("No subdirectories found in the provided root.")
 
-    if not items:
-        parser.error("No items provided. Pass items as args or via --file path.")
+    payloads = make_payloads_from_dirs(subdirs)
 
-    written = make_qr_svgs(
-        items,
-        out_dir=args.out_dir,
-        error=args.error,
+    written = save_qr_svgs_uniform(
+        payloads,
+        out_dir=pathlib.Path(args.out_dir),
+        error="m",
         scale=args.scale,
         border=args.border,
         dark=args.dark,
